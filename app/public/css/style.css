@@ -1,0 +1,132 @@
+body {
+  font-family: courier;
+  color:#FFF;
+  background: #000;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+#name, #basein {
+  background: #3D3D3D;
+  font: #FFF;
+  padding: 4px;
+  color: #FFF;
+  border: 1px solid #727272;
+  font-family: courier;
+}
+
+input[type="button"] {
+  border: initial;
+  margin: 2px;
+  padding: 6px;
+  background: #0AC520;
+  font-family: courier;
+  color: rgb(253, 253, 253);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.controls{
+  clear: left;
+  padding: 10px;
+  padding-left: 50px;
+}
+
+.controls .container{
+  float: left;
+  padding: 10px;
+}
+
+#tracklist{
+  display: none;
+  padding:10px;
+  font-size: 12px;
+}
+
+#tracklist .track{
+    width: 200px;
+  padding: 4px;
+  cursor: pointer;
+  float: left;
+}
+
+#tracklist .track:hover{
+  background: #0AC520;
+  font-family: courier;
+  color: rgb(253, 253, 253);
+
+}
+#editor {
+  clear: left;
+}
+#editor .bar {
+  fill: steelblue;
+}
+
+#editor .bar:hover {
+  fill: brown;
+}
+
+#editor .axis {
+  font: 10px sans-serif;
+  pointer-events:none;
+}
+
+#editor .axis path,
+#editor .axis line {
+  fill: none;
+  stroke: #FFF;
+  shape-rendering: crispEdges;
+  opacity: 0.3;
+}
+
+#editor .y line {
+  fill: none;
+  stroke: #FFF;
+  shape-rendering: crispEdges;
+}
+
+#editor .x.axis path {
+  /*display: none;
+*/}
+
+#editor .position {
+	fill: none;
+	stroke: black;
+	shape-rendering: crispEdges;
+}
+
+#editor .template {
+  fill:#00FFD6;
+  fill-opacity:0.8;
+  pointer-events:none;
+}
+
+#editor .item {
+/*  fill: #FFF;
+*/  cursor:col-resize;
+}
+
+#editor .spaceBottom, #editor .spaceTop {
+  fill: yellow;
+  opacity: 0.2;
+  cursor:row-resize;
+  /*pointer-events:all;*/
+}
+
+#editor .hide {
+  opacity: 0;
+}
+
+#editor .line {
+  stroke: #FFF;
+  fill:none;
+  stroke-width: 1;
+  opacity: 0.7;
+}
+
+#editor text {
+  fill: #FFF;
+}
+

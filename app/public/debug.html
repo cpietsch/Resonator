@@ -1,0 +1,761 @@
+<!DOCTYPE HTML>
+
+<html>
+	<head>
+		<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+
+		<script src="js/d3.v3.min.js"></script>
+		<script src="js/simple_statistics.js"></script>
+		<script src="js/socket.io.js"></script>
+		<script src="js/colorbrewer.js"></script>
+		<script src="js/cbuffer.js"></script>
+		<script src="js/sound.js"></script>
+		<script src="js/muse.js"></script>
+
+		<style type="text/css">
+			   body{
+          background: #000;
+        }
+
+      svg {
+        font: 10px sans-serif;
+      }
+      .axis text {
+        fill:#FFF;
+        opacity: 0.6;
+      }
+
+      .headline {
+      	fill:#FFF;
+        opacity: 0.8;
+        font: 12px sans-serif;
+      }
+
+      
+      .axis .tick line {
+        fill: none;
+        stroke: #FFF;
+        shape-rendering: crispEdges;
+        opacity: 0.1;
+      }
+
+      .zeroLine {
+        opacity: 0.4!important;
+      }
+
+      .line {
+        fill: none;
+        stroke: #000;
+      }
+
+      .bar {
+        .opacity: 0.2;
+        .fill:#FFF;
+      }
+
+      .tip {
+
+        opacity: 0.8;
+      }
+      .domain {
+        opacity: 0;
+      }
+
+      .line {
+        stroke:#FFF;
+        opacity: 0.9;
+      }
+
+      .indicator {
+      	width: 200px;
+      	
+      	color: #FFF;
+      	padding: 10px;
+      	  margin: 5px;
+      	background: rgba(255,255,255,0.1);
+      	float: left;
+      }
+
+      .button {
+      	width: 200px;
+      	
+      	color: #FFF;
+      	padding: 10px;
+      	  margin: 5px;
+      	background: rgb(226, 74, 255);
+      	cursor: pointer;
+      	clear: both;
+      }
+
+      .box {
+      	font-family: courier;
+      	width: 200px;
+      	
+      	color: #FFF;
+      	padding: 10px;
+      	  margin: 5px;
+      	background: rgba(255,255,255,0.1);
+
+      }
+      .box * {
+      	width: 100%;
+      }
+
+      .on {
+      	background: rgb(60, 213, 114)!important;
+      }
+
+      .indicator span{
+      	  background-color: #767676;
+		  margin-right: 5px;
+		  padding: 10px;
+		  width: 20px;
+		  /* height: 10px; */
+		  position: relative;
+		  float: left;
+      }
+
+      .sidebar {
+      	font-family: courier;
+		width: 250px;
+      	position: fixed;
+      	right: 0px;
+      	font-size: 10px;
+      }
+
+     .debug {
+
+     	font-size: 8px;
+     	background: rgba(255,255,255,0.1);
+
+     }
+     
+		</style>
+	</head>
+
+	<body>
+
+	<div class="sidebar">
+		<div id="battery" class="indicator">battery %</div>
+		<div id="ok" class="indicator">ok</div>
+		<div id="connected" class="indicator">connected</div>
+		<div id="is_good" class="indicator"></div>
+		<div id="calibrate" class="button">calibrate</div>
+		<div class="box">
+			<label for="calibrationSize">calibration window</label>
+			<output for="calibrationSize" id="calibrationSizeOut"></output>
+			<input id="calibrationSize" type="range" min="10" max="300" step="1" />
+			
+		</div>
+		<div class="box">
+			<label for="nowSize">now window</label>
+			<output for="nowSize" id="nowSizeOut"></output>
+			<input id="nowSize" type="range" min="1" max="20" step="1" />
+			
+		</div>
+		<div class="box">
+			<label for="eyeBlinkedTreshold">eye Blinked Treshold</label>
+			<output for="calibrationSize" id="eyeBlinkedTresholdOut"></output>
+			<input id="eyeBlinkedTreshold" type="range" min="0.1" max="2" step="0.1" />
+		</div>
+		<div id="debug" class="indicator debug"></div>
+	</div>
+<script type="text/javascript">
+
+
+
+function log(){
+	console.log(arguments);
+}
+
+
+
+function lorenz_manager(){
+	var self = {};
+
+	var width = window.innerWidth,
+	    height = window.innerHeight;
+
+	var data = d3.range(3);
+
+	var x = d3.scale.linear()
+	    .domain([-500, 500])
+	    .range([0, width]);
+
+	var y = d3.scale.linear()
+	    .domain([-500, 500])
+	    .range([0, height]);
+
+	var δτ = 0.003,
+	    ρ = 28,
+	    σ = 10,
+	    β = 8 / 3,
+	    x0 = .5,
+	    y0 = .5,
+	    z0 = 10;
+
+	var canvas = d3.select("body").style("background", "#000").append("canvas")
+	    .attr("width", width)
+	    .attr("height", height);
+
+	var color = d3.scale.linear()
+	    .domain([0, 20, 30, 45])
+	    .range(["yellow", "orange", "brown", "purple"])
+	    .interpolate(d3.interpolateHcl);
+
+	var context = canvas.node().getContext("2d");
+
+	context.globalCompositeOperation = "lighter";
+	context.translate(width / 2, height / 2);
+	context.scale(12, 8);
+	context.lineWidth = .25;
+
+
+	d3.timer(function() {
+	  var x = x0 + (Math.random() - .5) * 2,
+	      y = y0 + (Math.random() - .5) * 2,
+	      z = z0 + (Math.random() - .5) * 2,
+	      n = Math.random() * 30 | 0,
+	      t1 = Math.random() * 500;
+
+	  d3.timer(function(t0) {
+	    for (var i = 0; i < n; ++i) {
+	      context.strokeStyle = color(z);
+	      context.beginPath();
+	      context.moveTo(x, y);
+	      x += δτ * σ * (y - x);
+	      y += δτ * (x * (ρ - z) - y);
+	      z += δτ * (x * y - β * z);
+	      context.lineTo(x, y);
+	      context.stroke();
+	    }
+	    return t0 > t1;
+	  });
+
+	  context.save();
+	  context.setTransform(1, 0, 0, 1, 0, 0);
+	  context.globalCompositeOperation = "source-atop";
+	  context.fillStyle = "rgba(0,0,0,.06)";
+	  context.fillRect(0, 0, width, height);
+	  context.restore();
+	});
+
+
+	self.update = function(d){
+		x0 = (x(d[1]) - width / 2) / 12;
+		y0 = (y(d[0]) - height / 2) / 12;
+		z0 = 10;
+	}
+
+	return self;
+}
+
+function lorenzFFT(){
+	var self = this;
+
+	var width = window.innerWidth,
+	    height = window.innerHeight;
+
+	var data = d3.range(3);
+
+	var x = d3.scale.linear()
+	    .domain([-500, 500])
+	    .range([0, width]);
+
+	var y = d3.scale.linear()
+	    .domain([-500, 500])
+	    .range([0, height]);
+
+	var δτ = 0.003,
+	    ρ = 28,
+	    σ = 10,
+	    β = 8 / 3,
+	    x0 = .5,
+	    y0 = .5,
+	    z0 = 10;
+
+	var canvas = d3.select("body").append("canvas")
+	    .attr("width", width)
+	    .attr("height", height);
+
+	var color = d3.scale.linear()
+	    .domain([0, 20, 30, 45])
+	    .range(["yellow", "orange", "brown", "purple"])
+	    .interpolate(d3.interpolateHcl);
+
+	var context = canvas.node().getContext("2d");
+
+	context.globalCompositeOperation = "lighter";
+	context.translate(width / 2, height / 2);
+	context.scale(12, 8);
+	context.lineWidth = .25;
+
+
+	d3.timer(function() {
+	  var x = x0,
+	      y = y0,
+	      z = z0,
+	      n = 30,
+	      t1 = Math.random() * 500;
+
+	  d3.timer(function(t0) {
+	    for (var i = 0; i < n; ++i) {
+	      context.strokeStyle = color(z);
+	      context.beginPath();
+	      context.moveTo(x, y);
+	      x += δτ * σ * (y - x);
+	      y += δτ * (x * (ρ - z) - y);
+	      z += δτ * (x * y - β * z);
+	      context.lineTo(x, y);
+	      context.stroke();
+	    }
+	    return t0 > t1;
+	  });
+
+	  context.save();
+	  context.setTransform(1, 0, 0, 1, 0, 0);
+	  context.globalCompositeOperation = "source-atop";
+	  context.fillStyle = "rgba(0,0,0,.06)";
+	  context.fillRect(0, 0, width, height);
+	  context.restore();
+	});
+
+
+
+	self.update = function(d){
+		d.z_scoreNow.forEach(function(d,i) {
+			if(d>1) x0=i*4;
+			if(d>1.2) y0=i*4;
+		})
+		z0 = 10;
+		console.log(x0,y0)
+	}
+
+	return self;
+}
+
+
+
+
+
+function fft_viz2LogInside(){
+	var self = function() { };
+
+	var margin = {top: 20, right: 20, bottom: 30, left: 40},
+    width = 960 - margin.left - margin.right,
+    height = 200 - margin.top - margin.bottom;
+
+	var data = d3.range(4,50);
+
+	var x = d3.scale.ordinal()
+	    .rangeRoundBands([0, width], .1)
+	    .domain(data)
+
+	var y = d3.scale.linear()
+	    .range([height, 0])
+	    .domain([-4,2])
+	    .clamp(true)
+
+
+	var xAxis = d3.svg.axis()
+	    .scale(x)
+	    .orient("bottom");
+
+	var yAxis = d3.svg.axis()
+	    .scale(y)
+	    .orient("left")
+	    //.ticks(10, "%");
+
+	var svg = d3.select("body").append("svg")
+	    .attr("width", width + margin.left + margin.right)
+	    .attr("height", height + margin.top + margin.bottom)
+	  .append("g")
+	    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+
+  var axis = svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    // .append("text")
+    //   .attr("transform", "rotate(-90)")
+    //   .attr("y", 6)
+    //   .attr("dy", ".71em")
+    //   .style("text-anchor", "end")
+    //   .text("Frequency");
+
+  var chart = svg.selectAll(".bar")
+      .data(data)
+
+  var tip = svg.selectAll(".tip")
+      .data(data)
+
+   chart.enter().append("rect")
+      .attr("class", "bar")
+      .attr("x", function(d) { return x(d); })
+      .attr("width", x.rangeBand())
+      .attr("fill","#fff")
+      .style("opacity",0.2)
+
+   tip.enter().append("rect")
+      .attr("class", "tip")
+      .attr("x", function(d) { return x(d)+x.rangeBand()/4; })
+      .attr("width", x.rangeBand()/2)
+
+	self.update = function(d){
+		//console.log(Math.pow(10,d[0].raw))
+		d = d.slice(4,50);
+
+		var extentStatic = d3.extent(d, function(d,i){ return d.meanStatic; });
+		var extentMoving = d3.extent(d, function(d,i){ return d.mean; });
+
+		y.domain([Math.min(extentStatic[0], extentMoving[0]), Math.max(extentStatic[1], extentMoving[1])]);
+		axis.call(yAxis)
+
+		chart.data(d)
+			.attr("y", function(d,i) { return y(d.meanStatic); })
+			.attr("height", function(d,i) { return height - y(d.meanStatic); })
+
+		tip.data(d)
+			.attr("y", function(d,i) { return y(Math.max(d.meanStatic, d.mean)); })
+			.attr("height", function(d,i) { return Math.abs(y(d.mean) - y(d.meanStatic)); })
+			.attr("fill", function(d,i){
+				return y(d.mean) - y(d.meanStatic) > 0 ? "#E24AFF": "#4AFFB7";
+			})
+
+	}
+
+
+	return self;
+}
+var tmp;
+function fft_spectrogram(field, slice, domain){
+	var self = function() { };
+
+	var margin = {top: 60, right: 20, bottom: 30, left: 40},
+    width = 960,
+    height = 200;
+
+    var data = d3.range(slice[0],slice[1]);
+
+    var y = d3.scale.ordinal()
+	    .rangeRoundBands([0, height], .1)
+	    .domain(data)
+
+	var yBlock = y.rangeBand(); 
+
+	var color = d3.scale.linear()
+		.range(["steelblue", "yellow"])
+		// .range([ '#000000', '#0B16B5', '#FFF782', '#EB1250' ])
+		// .domain([0,-20])
+		.domain(domain)
+    	.interpolate(d3.interpolateHcl);
+
+
+	var canvas = d3.select("body").append("canvas")
+		.attr("width", width)
+	    .attr("height", height)
+	    .node()
+
+	var ctx = canvas
+	    .getContext("2d")
+
+	var tempCanvas = document.createElement("canvas"),
+        tempCtx = tempCanvas.getContext("2d");
+      	tempCanvas.width=width;
+    	tempCanvas.height=height;
+
+   	self.update = function(data){
+
+   		data = data.slice(slice[0],slice[1]);
+
+   		tempCtx.drawImage(canvas, 0, 0, width, height);
+   		ctx.clearRect(0, 0, width, height);
+
+   		ctx.beginPath();
+        ctx.moveTo(0, height);
+
+        data.forEach(function(d,i){
+        	ctx.fillStyle = color(d[field]);
+        	ctx.fillRect(1, y(d.freq), 1, yBlock);
+        })
+
+        var max = data.sort(function(a,b){
+          return b[field] - a[field];
+      	})[0];
+
+
+      	ctx.fillStyle = "#000000";
+       	ctx.fillRect(1, y(max.freq), 1, yBlock);
+
+  		ctx.closePath();
+
+
+        ctx.drawImage(tempCanvas, 0, 0, width, height, 1, 0, width, height);
+   	}
+
+    return self;
+}
+
+
+function fft_chart(field, slice){
+	var self = function() { };
+
+	var freqColors2 = d3.scale.threshold()
+	    .domain([4, 6.5, 8, 13, 15, 21, 38, 70])
+	    .range(colorbrewer.Dark2[8]);
+
+	var cbrewer = colorbrewer.Dark2[5].map(function(d){
+		return d3.rgb(d).darker();
+	})
+
+	var freqColors = d3.scale.threshold()
+		.domain([4, 8, 13, 30, 50])
+		.range(cbrewer)
+
+	var margin = {top: 60, right: 20, bottom: 30, left: 40},
+    width = 960 - margin.left - margin.right,
+    height = 200 - margin.top - margin.bottom;
+
+	var data = d3.range(slice[0],slice[1]);
+
+	var x = d3.scale.ordinal()
+	    .rangeRoundBands([0, width], .1)
+	    .domain(data)
+
+	var y = d3.scale.linear()
+	    .range([height, 0])
+	    .domain([0,1])
+	  	//.clamp(true)
+
+	var line = d3.svg.line()
+		.interpolate("cardinal")
+    	.y(function(d,i) { return y(d[field]); })
+    	.x(function(d,i) { return x(d.freq)+x.rangeBand()/2; })
+
+	var xAxis = d3.svg.axis()
+	    .scale(x)
+	    .orient("bottom");
+
+	var yAxis = d3.svg.axis()
+	    .scale(y)
+	    .orient("left")
+	    //.ticks(10, "%");
+
+	var svg = d3.select("body").append("svg")
+	    .attr("width", width + margin.left + margin.right)
+	    .attr("height", height + margin.top + margin.bottom)
+	  .append("g")
+	    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+	svg
+		.append("text")
+		.classed("headline", true)
+		.attr("y", -20)
+		.attr("x", -20)
+		//.attr("x", -margin.left)
+		.style("text-anchor", "start")
+		.text(field);
+
+  svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis)
+      	.selectAll("line")
+      	.attr("stroke",function(d,i) {
+      		return freqColors(d);
+      	})
+
+  var axis = svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    // .append("text")
+    //   .attr("transform", "rotate(-90)")
+    //   .attr("y", 6)
+    //   .attr("dy", ".71em")
+    //   .style("text-anchor", "end")
+    //   .text("Frequency");
+
+  var chart = svg.selectAll(".bar")
+      .data(data)
+
+   chart.enter().append("rect")
+      .attr("class", "bar")
+      .attr("x", function(d) { return x(d); })
+      .attr("width", x.rangeBand())
+      .attr("fill",function(d,i) {
+      	return freqColors(i);
+      })
+
+
+   var maxCircles = svg.selectAll(".max").data(d3.range(1))
+
+   maxCircles.enter().append("circle")
+      .attr("class", "max")
+      .attr("fill", "#FFF")
+      .attr("r", 10)
+
+
+  var svgLine = svg.append("g")
+  		.append("path")
+  		.attr("class", "line")
+
+  var extent = [0,0];
+
+
+	self.update = function(d){
+		//console.log(d[0].z_score)
+		d = d.slice(slice[0],slice[1]);
+
+		var extentNow = d3.extent(d, function(d){
+			return d[field];
+		});
+
+		if(extentNow[0] < extent[0]){
+			extent[0] = extentNow[0];
+		}
+
+		if(extentNow[1] > extent[1]){
+			extent[1] = extentNow[1];
+		}
+
+		y.domain(extent);
+		axis.call(yAxis);
+
+		chart.data(d)
+			.attr("y", function(d) { return y(d[field]); })
+			.attr("height", function(d) { return height-y(d[field]); })
+			
+		svgLine
+      		.datum(d)
+      		.attr("d", line);
+
+      	d.sort(function(a,b){
+      		return b[field] - a[field];
+      	});
+
+      	maxCircles
+      		.data(d.slice(0,1))
+      		//.transition()
+      		.attr("cx", function(d) { return x(d.freq)+10; })
+      		.attr("cy", function(d) { return y(d[field]); })
+
+
+      	//console.log(max[0].freq)
+      	//sound.setBinaural(max[0].freq);
+      	//sound.setBase(200+max[0].freq/2);
+
+      
+	}
+
+
+	return self;
+}
+
+
+
+
+
+var sound = sound_manager();
+//sound.setBase(100);
+var muse = muse_manager();
+
+muse.muse.on("debug", function(d){
+	var debug = d3.select("#debug");
+	var data = debug.datum() || [];
+	var date = new Date().toISOString().slice(11,19);
+	// data.unshift(date+ " "+d);
+	data.unshift(d);
+	if(data.length>10){ data = data.slice(0,10); }
+	debug.datum(data).html(function(d){ return d.join("<br>"); })
+})
+
+
+var raw = fft_spectrogram("raw1", [0,50], [-8,4]);
+var raw2 = fft_spectrogram("raw2", [0,50], [-8,4]);
+var spectro2 = fft_spectrogram("mean", [0,50], [35,50]);
+
+var mean = fft_chart("mean", [0,50]);
+var meanStatic = fft_chart("meanStatic", [0,50]);
+
+var fftVizLogInside = fft_viz2LogInside();
+
+var spectro = fft_spectrogram("z_scoreNowStatic", [0,30], [-0.5,0.5]);
+// var spectro3 = fft_spectrogram("z_scoreNowMoving", [0,30], [1,-1]);
+var spectro4 = fft_spectrogram("z_scoreNowStatic", [0,50], [-0.5,0.5]);
+var spectro5 = fft_spectrogram("abs_score", [0,50], [0,0.5]);
+var spectro6 = fft_spectrogram("abs_scoreSmooth", [0,50], [0,0.5]);
+var spectro7 = fft_spectrogram("abs_scoreSmooth2", [0,50], [0,0.5]);
+
+var z_scoreAvgStaticFull = fft_chart("z_scoreNowStatic", [0,50]);
+var z_scoreAvgStaticAvgFull = fft_chart("z_scoreAvgStatic", [0,50]);
+
+var z_scoreAvgStatic = fft_chart("z_scoreAvgStatic", [1,30]);
+
+var z_scoreAvgStaticSmooth = fft_chart("z_scoreAvgStaticSmooth",[1,30]);
+var z_scoreNowStaticSmooth = fft_chart("z_scoreNowStaticSmooth",[1,30]);
+var z_scoreNowStaticSmoothS = fft_spectrogram("z_scoreNowStaticSmooth",[1,30], [-0.5,0.5]);
+
+
+
+muse.fftRaw = function (d) {
+
+	raw.update(d);
+	raw2.update(d);
+
+	spectro.update(d);
+	spectro2.update(d);
+	// spectro3.update(d);
+	spectro4.update(d);
+	spectro5.update(d);
+	spectro6.update(d);
+	spectro7.update(d);
+
+	//fftVizLogInside.update(d);
+
+	mean.update(d);
+	meanStatic.update(d);
+
+	z_scoreAvgStaticFull.update(d);
+	z_scoreAvgStaticAvgFull.update(d);
+
+	z_scoreAvgStatic.update(d);
+
+	z_scoreAvgStaticSmooth.update(d);
+	z_scoreNowStaticSmooth.update(d);
+	z_scoreNowStaticSmoothS.update(d);
+}
+
+muse.muse.on("init", function(data){
+	d3.select("#calibrationSize").node().value  = data.calibrate / 10;
+	d3.select("#calibrationSize").node().value  = data.calibrate / 10;
+	d3.select("#calibrationSize").node().value  = data.calibrate / 10;
+})
+
+
+d3.select("#calibrate").on("click", function(d){
+	var calibrationSize = d3.select("#calibrationSize").node().value;
+	var nowSize = d3.select("#nowSize").node().value;
+	muse.muse.emit("calibrate", { now: nowSize, calibration: calibrationSize });
+})
+
+d3.select("#calibrationSize").on("mousemove", function(d){
+	var val = d3.select(this).node().value;
+	d3.select("#calibrationSizeOut").text(val);
+})
+
+d3.select("#nowSize").on("mousemove", function(d){
+	var val = d3.select(this).node().value;
+	d3.select("#nowSizeOut").text(val);
+})
+
+d3.select("#eyeBlinkedTreshold").on("change", function(d){
+	var val = d3.select(this).node().value;
+	d3.select("#eyeBlinkedTresholdOut").text(val);
+	muse.muse.emit("eyeBlinkedTreshold", val);
+})
+
+</script>
